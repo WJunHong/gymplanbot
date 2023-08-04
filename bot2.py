@@ -6,6 +6,36 @@ from pymongo import MongoClient
 from datetime import datetime, timedelta
 import random
 import certifi
+import os
+import sys
+import fcntl
+
+
+def acquire_lock():
+    lock_file_path = './lockfile.lock'
+
+    # Check if the lock file already exists (another instance is running)
+    if os.path.isfile(lock_file_path):
+        print("Another instance is already running. Exiting.")
+        sys.exit(1)
+
+    # Create the lock file and acquire the lock
+    lock_file = open(lock_file_path, 'w')
+    try:
+        fcntl.lockf(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        print("Lock acquired. Bot instance is running.")
+    except IOError:
+        print("Unable to acquire lock. Another instance is already running. Exiting.")
+        sys.exit(1)
+
+
+def release_lock():
+    lock_file_path = '/path/to/your/lockfile.lock'
+    try:
+        os.unlink(lock_file_path)
+        print("Lock released. Bot instance has finished.")
+    except Exception as e:
+        print("Error releasing lock:", e)
 
 
 # Config
@@ -598,72 +628,82 @@ async def refresh(update: Update, context: ContextTypes.DEFAULT_TYPE) -> str:
 
 
 def main() -> None:
-    application = Application.builder().token(TOKEN).build()
+    acquire_lock()
+    try:
+        application = Application.builder().token(TOKEN).build()
 
-    # In charge of handling different options selected
-    other_gym_plans = [
-        CallbackQueryHandler(clock_workout, pattern="^" +
-                             str(CLOCK_WORKOUT) + "$"),
-        CallbackQueryHandler(add_workout, pattern="^" + str(ADD_PLAN) + "$"),
-        CallbackQueryHandler(edit_workout, pattern="^" + str(EDIT_PLAN) + "$"),
-        CallbackQueryHandler(
-            delete_workout, pattern="^" + str(REMOVE_PLAN) + "$")
-    ]
+        # In charge of handling different options selected
+        other_gym_plans = [
+            CallbackQueryHandler(clock_workout, pattern="^" +
+                                 str(CLOCK_WORKOUT) + "$"),
+            CallbackQueryHandler(
+                add_workout, pattern="^" + str(ADD_PLAN) + "$"),
+            CallbackQueryHandler(
+                edit_workout, pattern="^" + str(EDIT_PLAN) + "$"),
+            CallbackQueryHandler(
+                delete_workout, pattern="^" + str(REMOVE_PLAN) + "$")
+        ]
 
-    other_recipes = [CallbackQueryHandler(
-        add_recipe, pattern="^" + str(ADD_RECIPE) + "$"),
-        CallbackQueryHandler(
-        delete_recipe, pattern="^" + str(DELETE_RECIPE) + "$")]
+        other_recipes = [CallbackQueryHandler(
+            add_recipe, pattern="^" + str(ADD_RECIPE) + "$"),
+            CallbackQueryHandler(
+            delete_recipe, pattern="^" + str(DELETE_RECIPE) + "$")]
 
-    # In charge of bringing the conversation to the SELECT_GYM_PLAN_ACTION state
-    # next states: CREATE_NEW_PLAN, EDIT_PLAN, DELETE_PLAN
-    gym_plan_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(
-            gym_plan_options, pattern="^" + str(SELECT_GYM_PLAN_ACTION) + "$")],
-        states={
-            SELECT_GYM_PLAN_ACTION:  # After all operations are done, should go back to this state
-            other_gym_plans,
-            ADD_PLAN: [CallbackQueryHandler(
-                add_workout, pattern=f"^{BACK}$|^{ARMS}$|^{LEGS}$|^{ABS}$|^{CHEST}$|^{SHOULDERS}$|^{REST_DAY}$"), CallbackQueryHandler(finish_add_plan, pattern="^" + str(FINISH_ADD_PLAN) + "$"), CallbackQueryHandler(next_day, pattern="^" + str(NEXT_DAY) + "$")],
-            EDIT_PLAN: [CallbackQueryHandler(
-                edit_workout, pattern=f"^{MON}$|^{TUES}$|^{WED}$|^{THURS}$|^{FRI}$|^{SAT}$|^{SUN}$|^{BACK}$|^{ARMS}$|^{LEGS}$|^{ABS}$|^{CHEST}$|^{SHOULDERS}$|^{REST_DAY}$"), CallbackQueryHandler(finish_edit_plan, pattern="^" + str(FINISH_EDIT_PLAN) + "$")],
-            REMOVE_PLAN: [CallbackQueryHandler(confirm_remove, pattern="^" + str(
-                CONFIRM_REMOVE) + "$"), CallbackQueryHandler(abort_remove, pattern="^" + str(ABORT_REMOVE) + "$")],
-            CLOCK_WORKOUT: [CallbackQueryHandler(
-                clock_workout, pattern=f"^{COMPLETED_WORKOUT}$|^{ALT_WORKOUT}$|^{INCOMPLETE_WORKOUT}$|^{BACK}$|^{ARMS}$|^{LEGS}$|^{ABS}$|^{CHEST}$|^{SHOULDERS}$|^{REST_DAY}$"), CallbackQueryHandler(finish_clock_workout, pattern="^" + FINISH_EDIT_PLAN + "$")]
+        # In charge of bringing the conversation to the SELECT_GYM_PLAN_ACTION state
+        # next states: CREATE_NEW_PLAN, EDIT_PLAN, DELETE_PLAN
+        gym_plan_handler = ConversationHandler(
+            entry_points=[CallbackQueryHandler(
+                gym_plan_options, pattern="^" + str(SELECT_GYM_PLAN_ACTION) + "$")],
+            states={
+                SELECT_GYM_PLAN_ACTION:  # After all operations are done, should go back to this state
+                other_gym_plans,
+                ADD_PLAN: [CallbackQueryHandler(
+                    add_workout, pattern=f"^{BACK}$|^{ARMS}$|^{LEGS}$|^{ABS}$|^{CHEST}$|^{SHOULDERS}$|^{REST_DAY}$"), CallbackQueryHandler(finish_add_plan, pattern="^" + str(FINISH_ADD_PLAN) + "$"), CallbackQueryHandler(next_day, pattern="^" + str(NEXT_DAY) + "$")],
+                EDIT_PLAN: [CallbackQueryHandler(
+                    edit_workout, pattern=f"^{MON}$|^{TUES}$|^{WED}$|^{THURS}$|^{FRI}$|^{SAT}$|^{SUN}$|^{BACK}$|^{ARMS}$|^{LEGS}$|^{ABS}$|^{CHEST}$|^{SHOULDERS}$|^{REST_DAY}$"), CallbackQueryHandler(finish_edit_plan, pattern="^" + str(FINISH_EDIT_PLAN) + "$")],
+                REMOVE_PLAN: [CallbackQueryHandler(confirm_remove, pattern="^" + str(
+                    CONFIRM_REMOVE) + "$"), CallbackQueryHandler(abort_remove, pattern="^" + str(ABORT_REMOVE) + "$")],
+                CLOCK_WORKOUT: [CallbackQueryHandler(
+                    clock_workout, pattern=f"^{COMPLETED_WORKOUT}$|^{ALT_WORKOUT}$|^{INCOMPLETE_WORKOUT}$|^{BACK}$|^{ARMS}$|^{LEGS}$|^{ABS}$|^{CHEST}$|^{SHOULDERS}$|^{REST_DAY}$"), CallbackQueryHandler(finish_clock_workout, pattern="^" + FINISH_EDIT_PLAN + "$")]
 
-        },
-        fallbacks=[CommandHandler("refresh", refresh_nested)], map_to_parent={
-            REFRESH: REFRESH
-        }
-    )
+            },
+            fallbacks=[CommandHandler("refresh", refresh_nested)], map_to_parent={
+                REFRESH: REFRESH
+            }
+        )
 
-    # In charge of bringing the conversation to the SELECT_RECIPE_ACTION state
-    # next states: ADD_RECIPE, DELETE_RECIPE
-    recipe_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(recipe_options, pattern="^" + str(SELECT_RECIPE_ACTION) + "$")], states={
-            SELECT_RECIPE_ACTION: other_recipes
-        }, fallbacks=[CommandHandler("refresh", refresh_nested)], map_to_parent={
-            REFRESH: REFRESH
-        }
-    )
+        # In charge of bringing the conversation to the SELECT_RECIPE_ACTION state
+        # next states: ADD_RECIPE, DELETE_RECIPE
+        recipe_handler = ConversationHandler(
+            entry_points=[CallbackQueryHandler(recipe_options, pattern="^" + str(SELECT_RECIPE_ACTION) + "$")], states={
+                SELECT_RECIPE_ACTION: other_recipes
+            }, fallbacks=[CommandHandler("refresh", refresh_nested)], map_to_parent={
+                REFRESH: REFRESH
+            }
+        )
 
-    # Top level handlers
-    selection_handlers = [
-        gym_plan_handler,
-        recipe_handler,
-    ]
+        # Top level handlers
+        selection_handlers = [
+            gym_plan_handler,
+            recipe_handler,
+        ]
 
-    # Main entry point
-    conv_handler = ConversationHandler(entry_points=[CommandHandler("start", start)], states={
-        SELECT_ACTION: selection_handlers,
-        # Call refresh twice to work???
-        REFRESH: [CommandHandler("continue", start)]
-    }, fallbacks=[CommandHandler("stop", stop), CommandHandler("help", helper), CommandHandler("refresh", refresh)])
+        # Main entry point
+        conv_handler = ConversationHandler(entry_points=[CommandHandler("start", start)], states={
+            SELECT_ACTION: selection_handlers,
+            # Call refresh twice to work???
+            REFRESH: [CommandHandler("continue", start)]
+        }, fallbacks=[CommandHandler("stop", stop), CommandHandler("help", helper), CommandHandler("refresh", refresh)])
 
-    application.add_handler(conv_handler)
+        application.add_handler(conv_handler)
 
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
+    except KeyboardInterrupt:
+        print("Keyboard interrupt received. Exiting.")
+
+    finally:
+        # Release the lock when the bot finishes
+        release_lock()
 
 
 if __name__ == "__main__":
