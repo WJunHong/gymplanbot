@@ -30,7 +30,7 @@ def acquire_lock():
 
 
 def release_lock():
-    lock_file_path = '/path/to/your/lockfile.lock'
+    lock_file_path = './lockfile.lock'
     try:
         os.unlink(lock_file_path)
         print("Lock released. Bot instance has finished.")
